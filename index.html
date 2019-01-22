@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<meta charset=utf-8>
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+<title>Room intro tool</title>
+<link rel="shortcut icon" href="https://play.pokemonshowdown.com/favicon.ico">
+<link rel=stylesheet href="https://play.pokemonshowdown.com/style/client.css">
+<link rel=stylesheet href="https://play.pokemonshowdown.com/style/sim-types.css">
+<link rel=stylesheet href="https://play.pokemonshowdown.com/style/battle.css">
+<link rel=stylesheet href="https://play.pokemonshowdown.com/style/utilichart.css">
+<link rel=stylesheet href="https://play.pokemonshowdown.com/style/font-awesome.css">
+<link rel=stylesheet href="https://cdn.firebase.com/libs/firepad/1.4.0/firepad.css" />
+<style>
+#header h1 {
+	color: black;
+	padding-left: 0.5em;
+	text-shadow: 2px 2px 1px #888;
+}
+#html-input, #html-output {
+	display: block;
+}
+#html-input {
+	left: 0;
+	right: auto;
+	width: 500px;
+}
+#html-output {
+	width: auto;
+	right: 0;
+	left: 501px;
+}
+#html-editor {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+}
+.powered-by-firepad {
+	display: none;
+}
+</style>
+<div id="header" class="header">
+	<h1>PROOF OF CONCEPT (not a room intro tool)</h1>
+	<div class="maintabbarbottom"></div>
+	<div class="userbar">
+		<button class="button" id="dark">Toggle Dark Mode</button>
+	</div>
+</div>
+<div class="ps-room ps-room-light scrollable" id="html-input">
+	<div id="html-editor"></div>
+</div>
+<div class="ps-room ps-room-light scrollable" id="html-output">
+	<div class="chat-log hasuserlist">
+		<div class="inner">
+			<div class="notice"><div class="infobox infobox-limited" id="html-caja-output"></div></div>
+			<div class="notice">Source:</div>
+			<div class="notice"><div class="infobox"><code>/roomintro <span id="html-intro-code"></span></code></div></div>
+		</div>
+
+	</div>
+	<ul class="userlist">
+		<li class="userlist-count" id="upperstaff-userlist-users" style="text-align:center;padding:2px 0"><small><span id="upperstaff-usercount-users">1</span> user</small></li>
+		<li><button class="userbutton username"><em class="group staffgroup">#</em><strong><em>You</em></strong></button></li>
+	</ul>
+	<div class="chat-log-add hasuserlist"></div>
+</div>
+<script>
+window.global = window
+</script>
+<script src="https://www.gstatic.com/firebasejs/5.5.4/firebase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.3.3/ace.js"></script>
+<script src="https://cdn.firebase.com/libs/firepad/1.4.0/firepad.min.js"></script>
+<script src="https://play.pokemonshowdown.com/js/lib/jquery-2.1.4.min.js"></script>
+<script src="https://play.pokemonshowdown.com/js/lib/html-css-sanitizer-minified.js"></script>
+<script src="https://play.pokemonshowdown.com/js/battledata.js"></script>
+<script>
+function parseCSS(code) {
+	var parsed = document.createElement('div')
+	parsed.innerHTML = code
+
+	var implDocument = document.implementation.createHTMLDocument("Temporary CSS storage")
+
+	var stylesheets = parsed.getElementsByTagName('style')
+	for (var i = 0; i < stylesheets.length; i++) {
+		var element = stylesheets[i]
+		// CSS element needs to be in document to be actually parsed
+		implDocument.body.appendChild(element)
+		var rules = element.sheet.cssRules
+		for (var j = 0; j < rules.length; j++) {
+			var rule = rules[j]
+			var elements = parsed.querySelectorAll(rule.selectorText)
+			for (var k = 0; k < elements.length; k++) {
+				var element = elements[k]
+				var newValue = (element.getAttribute('style') || "") + rule.style.cssText
+				element.setAttribute('style', newValue)
+			}
+		}
+	}
+
+	return parsed.innerHTML
+}
+var removableListeners = []
+function modifyRoomIntro(action, editor) {
+	for (var i = 0; i < removableListeners.length; i++) {
+		removableListeners[i]()
+	}
+	removableListeners = []
+	var rawValue = editor.getSession().getValue()
+	var value = parseCSS(rawValue)
+	document.getElementById('html-caja-output').innerHTML = BattleLog.sanitizeHTML(value)
+	var sanitizer = document.createElement('div')
+	sanitizer.innerHTML = value
+	var images = sanitizer.getElementsByTagName('img')
+	for (var i = 0; i < images.length; i++) {
+		var image = images[i]
+		var listener = function listener() {
+			this.setAttribute("width", this.width)
+			this.setAttribute("height", this.height)
+			updateCode(sanitizer)
+		}
+		removableListeners.push(function removeListenerIife(image, listener) {
+			return function removeListener() {
+				image.removeEventListener('load', listener)
+			}
+		}(image, listener))
+		image.addEventListener('load', listener)
+	}
+	updateCode(sanitizer)
+}
+function updateCode(sanitizer) {
+	document.getElementById('html-intro-code').textContent = sanitizer.innerHTML
+}
+firebase.initializeApp({
+    apiKey: "AIzaSyDoE8fGlEF5svvFTXVX3odrQgKIPcs73mQ",
+    authDomain: "room-intro.firebaseapp.com",
+    databaseURL: "https://room-intro.firebaseio.com"
+})
+var editor = ace.edit('html-editor')
+var session = editor.getSession()
+var Range = ace.require('ace/range').Range
+session.setOption("useWorker", false)
+session.setMode('ace/mode/html')
+session.setUseWrapMode(true)
+editor.on('change', modifyRoomIntro)
+editor.focus()
+var firepad = Firepad.fromACE(firebase.database().ref(), editor)
+$('#dark').on('click', function () {
+	var $html = $('html')
+	if ($html.hasClass('dark')) {
+		editor.setTheme('ace/theme/textmate')
+		$html.removeClass('dark')
+	} else {
+		editor.setTheme('ace/theme/twilight')
+		$html.addClass('dark')
+	}
+})
+</script>
